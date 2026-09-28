@@ -490,7 +490,7 @@ export default function Alerts() {
               </button>
             ) : null}
           </div>
-temp
+
           <div style={{ overflowX: 'auto' }}>
             <table>
               <thead>
