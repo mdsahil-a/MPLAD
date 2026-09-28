@@ -1,3 +1,4 @@
+import React from 'react'
 import { tierOf } from '../../utils/risk.js'
 
 export default function RiskBadge({ risk }){

@@ -1,3 +1,4 @@
+import React from 'react'
 import { createContext, useContext, useState } from 'react'
 
 // Optional global state - only needed if pages start sharing filter/search state.

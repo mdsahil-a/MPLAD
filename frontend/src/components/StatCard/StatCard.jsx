@@ -1,3 +1,4 @@
+import React from 'react'
 export default function StatCard({ label, value, tone, change, sub }) {
   const badgeClass = tone === 'high' ? 'pill high' : tone === 'med' ? 'pill med' : 'pill low'
   
