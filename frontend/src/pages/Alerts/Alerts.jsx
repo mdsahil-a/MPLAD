@@ -485,11 +485,12 @@ export default function Alerts() {
                 style={{ padding: '4px 10px', fontSize: 11 }}
                 onClick={() => { setTier('all'); setTypeFilter('all'); setQ(''); }}
               >
+              
                 Clear Filters
               </button>
             ) : null}
           </div>
-
+temp
           <div style={{ overflowX: 'auto' }}>
             <table>
               <thead>
