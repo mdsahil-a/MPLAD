@@ -1,105 +1,340 @@
-import { useState } from 'react'
-import { getStats, projects } from '../../data/mockData.js'
+import { useState, useEffect, useMemo } from 'react';
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  AreaChart,
+  Area
+} from 'recharts';
+import {
+  FileText,
+  Download,
+  FileSpreadsheet,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle2,
+  Building2,
+  Calendar,
+  Layers,
+  ShieldCheck
+} from 'lucide-react';
+import { fetchReports } from '../../api/reportApi.js';
 
-export default function Reports(){
-  const stats = getStats()
-  const [tab, setTab] = useState('overview')
+function fmtINR(n) {
+  if (!n) return '₹0';
+  if (n >= 10000000) return '₹' + (n / 10000000).toFixed(2) + ' Cr';
+  return '₹' + (n / 100000).toFixed(1) + 'L';
+}
 
-  const byDistrict = {}
-  projects.forEach(p => { byDistrict[p.district] = (byDistrict[p.district]||0) + 1 })
-  const topDistricts = Object.entries(byDistrict).sort((a,b)=>b[1]-a[1])
-  const maxCount = Math.max(...topDistricts.map(([,c])=>c))
+export default function Reports() {
+  const [stats, setStats] = useState({ total: 0, high: 0, med: 0, low: 0, fundReleased: 0 });
+  const [tab, setTab] = useState('overview');
+  const [districtData, setDistrictData] = useState([]);
+  const [timeRange, setTimeRange] = useState('30');
+  const [loading, setLoading] = useState(true);
+  const [dateFilter, setDateFilter] = useState(() => localStorage.getItem('topbar_date_range') || 'Last 30 days');
+  const [districtFilter, setDistrictFilter] = useState(() => localStorage.getItem('topbar_district') || 'All Districts');
 
-  const r = 42, c = 2*Math.PI*r
-  const submitted = 0.42, progress = 0.31, denied = 0.14, others = 1 - 0.42 - 0.31 - 0.14
-  const segs = [
-    { pct: submitted, color: 'var(--navy-600)' },
-    { pct: progress, color: 'var(--amber-600)' },
-    { pct: denied, color: 'var(--red-600)' },
-    { pct: others, color: 'var(--green-600)' },
-  ]
-  let offset = 0
-  const arcs = segs.map(s => { const len = c*s.pct; const a = { ...s, len, offset }; offset -= len; return a })
+  useEffect(() => {
+    const handleDateChange = (e) => setDateFilter(e.detail || 'Last 30 days');
+    const handleDistrictChange = (e) => setDistrictFilter(e.detail || 'All Districts');
+    window.addEventListener('date_range_changed', handleDateChange);
+    window.addEventListener('topbar_district_changed', handleDistrictChange);
+    return () => {
+      window.removeEventListener('date_range_changed', handleDateChange);
+      window.removeEventListener('topbar_district_changed', handleDistrictChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchReports()
+      .then(data => {
+        if (data && data.stats) setStats(data.stats);
+        if (data && data.topDistricts) {
+          if (Array.isArray(data.topDistricts)) {
+            const formatted = data.topDistricts.map(item =>
+              Array.isArray(item) ? { district: item[0], count: item[1] } : { district: item.district, count: item.count }
+            );
+            setDistrictData(formatted);
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching reports data:', err);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Project Status Breakdown Chart Data
+  const statusData = [
+    { name: 'Completed / Verified', count: 3, pct: 25, color: '#10B981' },
+    { name: 'In Progress / Active', count: 5, pct: 42, color: '#3B82F6' },
+    { name: 'Under Audit Review', count: 3, pct: 25, color: '#F59E0B' },
+    { name: 'Delayed / Flagged', count: 1, pct: 8, color: '#EF4444' }
+  ];
+
+  // Monthly Fund Disbursement Trend Data
+  const monthlyDisbursementData = [
+    { month: 'Jan', disbursedLakhs: 42.5, auditedLakhs: 40.0 },
+    { month: 'Feb', disbursedLakhs: 58.0, auditedLakhs: 52.5 },
+    { month: 'Mar', disbursedLakhs: 74.2, auditedLakhs: 68.0 },
+    { month: 'Apr', disbursedLakhs: 61.5, auditedLakhs: 59.0 },
+    { month: 'May', disbursedLakhs: 85.0, auditedLakhs: 72.0 },
+    { month: 'Jun', disbursedLakhs: 92.4, auditedLakhs: 84.5 }
+  ];
+
+  // Export summary report function
+  const handleExportPDF = (reportType) => {
+    alert(`Generating official ${reportType} report... Download started.`);
+  };
 
   return (
     <div>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+      {/* Header & Export Actions */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <div>
-          <div className="page-title">Reports &amp; Analytics</div>
-          <div className="page-sub">Aggregate view of fund utilization and risk across districts</div>
-        </div>
-        <button className="btn">↓ Export</button>
-      </div>
-
-      <div className="tabs">
-        <button className={`tab ${tab==='overview'?'active':''}`} onClick={()=>setTab('overview')}>Overview</button>
-        <button className={`tab ${tab==='detailed'?'active':''}`} onClick={()=>setTab('detailed')}>Detailed</button>
-        <button className={`tab ${tab==='custom'?'active':''}`} onClick={()=>setTab('custom')}>Custom</button>
-        <select className="input" style={{marginLeft:'auto',maxWidth:160}}>
-          <option>Last 30 days</option>
-          <option>Last 90 days</option>
-          <option>This year</option>
-        </select>
-      </div>
-
-      <div className="grid stat-grid">
-        <div className="card stat">
-          <div className="n">{stats.total.toLocaleString()}</div>
-          <div className="l">Total Projects</div>
-          <div style={{fontSize:11,color:'var(--green-600)',marginTop:4}}>+3% from last month</div>
-        </div>
-        <div className="card stat">
-          <div className="n">{stats.high+stats.med}</div>
-          <div className="l">Flagged Projects</div>
-          <div style={{fontSize:11,color:'var(--red-600)',marginTop:4}}>+15% from last month</div>
-        </div>
-        <div className="card stat">
-          <div className="n">{stats.high}</div>
-          <div className="l">High Risk Projects</div>
-          <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>+0% from last month</div>
-        </div>
-        <div className="card stat">
-          <div className="n">₹{(stats.fundReleased/10000000).toFixed(2)} Cr</div>
-          <div className="l">Total Fund Utilized</div>
-          <div style={{fontSize:11,color:'var(--green-600)',marginTop:4}}>+2% from last month</div>
-        </div>
-      </div>
-
-      <div className="grid" style={{gridTemplateColumns:'1fr 1fr',alignItems:'stretch'}}>
-        <div className="card">
-          <strong style={{fontSize:14}}>Project Status</strong>
-          <div style={{display:'flex',alignItems:'center',gap:20,marginTop:14,justifyContent:'center'}}>
-            <svg width="110" height="110" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r={r} fill="none" stroke="var(--surface-0)" strokeWidth="14" />
-              {arcs.map((a,i) => (
-                <circle key={i} cx="50" cy="50" r={r} fill="none" stroke={a.color} strokeWidth="14"
-                  strokeDasharray={`${a.len} ${c-a.len}`} strokeDashoffset={a.offset} transform="rotate(-90 50 50)" />
-              ))}
-            </svg>
-            <div className="donut-legend">
-              <span><i className="dot" style={{background:'var(--navy-600)'}}></i>Submitted ({Math.round(submitted*100)}%)</span>
-              <span><i className="dot" style={{background:'var(--amber-600)'}}></i>In progress ({Math.round(progress*100)}%)</span>
-              <span><i className="dot" style={{background:'var(--red-600)'}}></i>Denied ({Math.round(denied*100)}%)</span>
-              <span><i className="dot" style={{background:'var(--green-600)'}}></i>Others ({Math.round(others*100)}%)</span>
-            </div>
+          <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <FileText size={26} style={{ color: 'var(--blue-main)' }} />
+            <span>Audit &amp; Compliance Reports Studio</span>
+          </div>
+          <div className="page-sub" style={{ marginBottom: 0 }}>
+            Official government compliance documentation, fund disbursement audits, and ML surveillance analytics
           </div>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button className="btn" onClick={() => handleExportPDF('MPLADS Executive Audit Summary')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Download size={14} />
+            <span>Export Executive Report</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs & Period Filter */}
+      <div className="tabs">
+        <button className={`tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>
+          Executive Overview
+        </button>
+        <button className={`tab ${tab === 'financial' ? 'active' : ''}`} onClick={() => setTab('financial')}>
+          Financial Disbursement Audit
+        </button>
+        <button className={`tab ${tab === 'compliance' ? 'active' : ''}`} onClick={() => setTab('compliance')}>
+          ML Compliance &amp; Anomaly Log
+        </button>
+
+        <select className="select-input" style={{ marginLeft: 'auto', maxWidth: 180 }} value={timeRange} onChange={e => setTimeRange(e.target.value)}>
+          <option value="30">Period: Last 30 days</option>
+          <option value="90">Period: Last 90 days</option>
+          <option value="365">Period: Current Financial Year</option>
+        </select>
+      </div>
+
+      {/* KPI Stat Cards */}
+      <div className="grid stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 20 }}>
+        <div className="card stat">
+          <div className="l">Total Tracked Projects</div>
+          <div className="n">{stats.total.toLocaleString()}</div>
+          <div className="sub" style={{ color: 'var(--emerald-main)', fontWeight: 600 }}>100% Tracked in GIS</div>
+        </div>
+
+        <div className="card stat">
+          <div className="l">Total Funds Disbursed</div>
+          <div className="n">₹{(stats.fundReleased / 10000000).toFixed(2)} Cr</div>
+          <div className="sub">Audited Allocation</div>
+        </div>
+
+        <div className="card stat">
+          <div className="l">Flagged Audit Issues</div>
+          <div className="n" style={{ color: 'var(--red-main)' }}>{stats.high + stats.med}</div>
+          <div className="sub" style={{ color: 'var(--red-text)' }}>{stats.high} High Urgency Flags</div>
+        </div>
+
+        <div className="card stat">
+          <div className="l">System Audit Health</div>
+          <div className="n" style={{ color: 'var(--emerald-main)' }}>94.2%</div>
+          <div className="sub">Clean Verification Rate</div>
+        </div>
+      </div>
+
+      {/* Visual Analytics Charts Grid */}
+      <div className="projects-analytics-grid">
+        {/* Chart 1: Monthly Disbursement Trend (Area Chart) */}
         <div className="card">
-          <strong style={{fontSize:14}}>Top Risk Districts</strong>
-          <div style={{marginTop:14}}>
-            {topDistricts.map(([d, count]) => (
-              <div key={d} style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
-                <div style={{width:90,fontSize:12,color:'var(--text-secondary)'}}>{d}</div>
-                <div style={{flex:1,background:'var(--surface-0)',borderRadius:4,height:10}}>
-                  <div style={{width:`${count/maxCount*100}%`,background:'var(--navy-600)',height:'100%',borderRadius:4}} />
-                </div>
-                <div style={{fontSize:12,width:18,textAlign:'right'}}>{count}</div>
+          <div className="chart-card-header">
+            <div>
+              <div className="chart-card-title">
+                <TrendingUp size={18} style={{ color: 'var(--blue-main)' }} />
+                <span>Monthly Fund Disbursement &amp; Audit Trail (₹L)</span>
               </div>
-            ))}
+              <div className="chart-card-sub">Comparative trend of disbursed vs verified funds</div>
+            </div>
+          </div>
+
+          <div style={{ width: '100%', height: 210 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={monthlyDisbursementData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="disbursedGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="auditedGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={11} />
+                <YAxis stroke="var(--text-muted)" fontSize={11} unit="L" />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const d = payload[0].payload;
+                      return (
+                        <div className="custom-recharts-tooltip">
+                          <p>{d.month} Disbursed</p>
+                          <div style={{ color: '#3B82F6' }}>Disbursed: ₹{d.disbursedLakhs}L</div>
+                          <div style={{ color: '#10B981' }}>Audited: ₹{d.auditedLakhs}L</div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Area type="monotone" dataKey="disbursedLakhs" name="Disbursed (₹L)" stroke="#3B82F6" fillOpacity={1} fill="url(#disbursedGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="auditedLakhs" name="Audited (₹L)" stroke="#10B981" fillOpacity={1} fill="url(#auditedGrad)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart 2: Project Execution Status Breakdown (Donut Chart) */}
+        <div className="card">
+          <div className="chart-card-header">
+            <div>
+              <div className="chart-card-title">
+                <ShieldCheck size={18} style={{ color: 'var(--emerald-main)' }} />
+                <span>Portfolio Execution Status Breakdown</span>
+              </div>
+              <div className="chart-card-sub">Audit verification status across active works</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', flexWrap: 'wrap', gap: 16 }}>
+            <div style={{ width: 170, height: 170 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    dataKey="count"
+                    nameKey="name"
+                    innerRadius={48}
+                    outerRadius={75}
+                    paddingAngle={4}
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="custom-recharts-tooltip">
+                            <p style={{ color: data.color }}>{data.name}</p>
+                            <div>Projects: {data.count} ({data.pct}%)</div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 180 }}>
+              {statusData.map(item => (
+                <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 12.5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: item.color, display: 'inline-block' }}></span>
+                    <span style={{ fontWeight: 600 }}>{item.name}</span>
+                  </div>
+                  <span style={{ fontWeight: 700 }}>{item.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Official Government Downloadable Reports Section */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <strong style={{ fontSize: 14, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+          Downloadable Compliance &amp; Audit Document Templates
+        </strong>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Generate formatted PDF/CSV audit reports for Ministry submission and MoSPI compliance records.
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+          <div style={{ padding: 14, background: 'var(--surface-subtle)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <i className="fa-solid fa-file-pdf" style={{ color: 'var(--red-main)', fontSize: 18 }}></i>
+                <span style={{ fontWeight: 700, fontSize: 13.5 }}>Quarterly MPLAD Audit Report</span>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Comprehensive quarterly report detailing total funds sanctioned, expenditure ratios, and milestone progress.
+              </p>
+            </div>
+            <button className="btn btn-secondary" onClick={() => handleExportPDF('Quarterly Audit Report')} style={{ width: '100%', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Download size={13} /> Download PDF (2.4 MB)
+            </button>
+          </div>
+
+          <div style={{ padding: 14, background: 'var(--surface-subtle)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <i className="fa-solid fa-file-csv" style={{ color: 'var(--emerald-main)', fontSize: 18 }}></i>
+                <span style={{ fontWeight: 700, fontSize: 13.5 }}>ML Anomaly Detection Audit Log</span>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Detailed CSV export of Isolation Forest outlier scores, TF-IDF duplicate work matches, and rule explanations.
+              </p>
+            </div>
+            <button className="btn btn-secondary" onClick={() => handleExportPDF('ML Anomaly CSV')} style={{ width: '100%', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Download size={13} /> Download CSV Data
+            </button>
+          </div>
+
+          <div style={{ padding: 14, background: 'var(--surface-subtle)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <i className="fa-solid fa-file-lines" style={{ color: 'var(--blue-main)', fontSize: 18 }}></i>
+                <span style={{ fontWeight: 700, fontSize: 13.5 }}>District Constituency Fund Summary</span>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Summary report of constituency-wise fund allocations, MP disbursements, and high-risk flags.
+              </p>
+            </div>
+            <button className="btn btn-secondary" onClick={() => handleExportPDF('Constituency Summary')} style={{ width: '100%', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Download size={13} /> Download PDF (1.8 MB)
+            </button>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

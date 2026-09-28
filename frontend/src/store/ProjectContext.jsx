@@ -1,7 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 
-// Optional global state - only needed if pages start sharing filter/search state,
-// or once real API data replaces mockData.js and multiple pages need the same fetch.
+// Optional global state - only needed if pages start sharing filter/search state.
 const ProjectContext = createContext(null)
 
 export function ProjectProvider({ children }){
