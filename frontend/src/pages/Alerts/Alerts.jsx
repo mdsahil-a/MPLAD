@@ -479,11 +479,11 @@ export default function Alerts() {
             <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
               Showing {filteredAlerts.length} Flagged Risk Alerts
             </span>
-            {tier !== 'all' || typeFilter !== 'all' || q ? (
+            {tier !== 'all' || typeFilter !== 'all' ? (
               <button
                 className="btn btn-secondary"
                 style={{ padding: '4px 10px', fontSize: 11 }}
-                onClick={() => { setTier('all'); setTypeFilter('all'); setQ(''); }}
+                onClick={() => { setTier('all'); setTypeFilter('all'); }}
               >
               
                 Clear Filters
